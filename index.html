@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Investment Portfolio Tracker</title>
+    <title>Investment Portfolio Tracker - Live Prices</title>
     <style>
         * {
             margin: 0;
@@ -37,6 +37,32 @@
             font-size: 2.5em;
             margin-bottom: 20px;
             text-align: center;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .live-dot {
+            width: 12px;
+            height: 12px;
+            background: #27ae60;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .update-time {
+            color: #1a1a2e;
+            font-size: 0.9em;
         }
 
         .header-stats {
@@ -161,6 +187,13 @@
             border-color: #d4af37;
         }
 
+        .live-price {
+            background: #27ae60 !important;
+            border-color: #27ae60 !important;
+            color: white !important;
+            font-weight: bold;
+        }
+
         .total-row {
             background: #16213e;
             font-weight: bold;
@@ -173,7 +206,7 @@
             padding-bottom: 15px;
         }
 
-        .add-btn {
+        .add-btn, .refresh-btn {
             background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
             color: white;
             padding: 12px 25px;
@@ -181,11 +214,16 @@
             border-radius: 8px;
             cursor: pointer;
             margin-top: 15px;
+            margin-right: 10px;
             font-size: 1em;
             transition: all 0.3s;
         }
 
-        .add-btn:hover {
+        .refresh-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        }
+
+        .add-btn:hover, .refresh-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
         }
@@ -198,6 +236,11 @@
             border-radius: 5px;
             cursor: pointer;
             font-size: 0.85em;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
         }
 
         .dashboard-grid {
@@ -226,6 +269,15 @@
             border-bottom: 1px solid #2c3e50;
         }
 
+        .alert {
+            background: #f39c12;
+            color: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
         @media (max-width: 768px) {
             h1 {
                 font-size: 1.8em;
@@ -248,6 +300,10 @@
 <body>
     <div class="container">
         <header>
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span class="update-time">Live Prices • Last Updated: <span id="lastUpdate">Loading...</span></span>
+            </div>
             <h1>💰 Investment Portfolio Tracker</h1>
             <div class="header-stats">
                 <div class="stat-card">
@@ -267,7 +323,12 @@
                     <div class="stat-value profit-positive" id="totalReturn">0%</div>
                 </div>
             </div>
+            <button class="refresh-btn" onclick="fetchLivePrices()">🔄 Refresh Live Prices</button>
         </header>
+
+        <div id="priceAlert" class="alert" style="display:none;">
+            <strong>⚠️ Note:</strong> Live prices fetched via API proxy. Click refresh to update.
+        </div>
 
         <div class="tabs">
             <button class="tab active" onclick="showTab('silver')">Tata Silver</button>
@@ -383,22 +444,103 @@
     <script>
         const portfolioData = {
             silver: [
-                {name: 'YC', qty: 86827, avgPrice: 22.59, currentPrice: 33.95},
-                {name: 'QF', qty: 72450, avgPrice: 27.59, currentPrice: 33.95},
-                {name: 'FQ', qty: 48953, avgPrice: 18.59, currentPrice: 33.95},
-                {name: 'VX', qty: 21200, avgPrice: 25.38, currentPrice: 33.95},
-                {name: 'SL', qty: 96607, avgPrice: 22.46, currentPrice: 33.95}
+                {name: 'YC', qty: 86827, avgPrice: 22.59, currentPrice: 33.95, symbol: 'TATSILV.NS'},
+                {name: 'QF', qty: 72450, avgPrice: 27.59, currentPrice: 33.95, symbol: 'TATSILV.NS'},
+                {name: 'FQ', qty: 48953, avgPrice: 18.59, currentPrice: 33.95, symbol: 'TATSILV.NS'},
+                {name: 'VX', qty: 21200, avgPrice: 25.38, currentPrice: 33.95, symbol: 'TATSILV.NS'},
+                {name: 'SL', qty: 96607, avgPrice: 22.46, currentPrice: 33.95, symbol: 'TATSILV.NS'}
             ],
             silverbees: [
-                {name: 'SL', qty: 10000, avgPrice: 185, currentPrice: 311.54}
+                {name: 'Silver Bees', qty: 10000, avgPrice: 185, currentPrice: 311.54, symbol: 'SILVERBEES.NS'}
             ],
             gold: [
-                {name: 'Tata Gold', qty: 66340, avgPrice: 13.25, currentPrice: 16.1}
+                {name: 'Tata Gold', qty: 66340, avgPrice: 13.25, currentPrice: 16.1, symbol: 'TGOLD.NS'}
             ],
             goldbees: [
-                {name: 'Gold Bees', qty: 10000, avgPrice: 105.71, currentPrice: 135.55}
+                {name: 'Gold Bees', qty: 10000, avgPrice: 105.71, currentPrice: 135.55, symbol: 'GOLDBEES.NS'}
             ]
         };
+
+        // Fetch live prices using Yahoo Finance API via CORS proxy
+        async function fetchLivePrices() {
+            const btn = event?.target;
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ Fetching Live Prices...';
+            }
+
+            document.getElementById('priceAlert').style.display = 'block';
+
+            try {
+                // Collect unique symbols
+                const symbols = new Set();
+                Object.values(portfolioData).flat().forEach(item => symbols.add(item.symbol));
+
+                // Fetch prices for each symbol
+                const pricePromises = Array.from(symbols).map(async symbol => {
+                    try {
+                        // Using Yahoo Finance via CORS Anywhere alternative
+                        const corsProxy = 'https://api.allorigins.win/raw?url=';
+                        const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`;
+
+                        const response = await fetch(corsProxy + encodeURIComponent(yahooUrl));
+                        const data = await response.json();
+
+                        if (data.chart && data.chart.result && data.chart.result[0]) {
+                            const price = data.chart.result[0].meta.regularMarketPrice;
+                            return { symbol, price };
+                        }
+                        return { symbol, price: null };
+                    } catch (error) {
+                        console.error(`Error fetching ${symbol}:`, error);
+                        return { symbol, price: null };
+                    }
+                });
+
+                const results = await Promise.all(pricePromises);
+
+                // Create price map
+                const priceMap = {};
+                results.forEach(({ symbol, price }) => {
+                    if (price) priceMap[symbol] = price;
+                });
+
+                // Update prices in portfolio data
+                let updateCount = 0;
+                Object.keys(portfolioData).forEach(category => {
+                    portfolioData[category].forEach(item => {
+                        if (priceMap[item.symbol]) {
+                            item.currentPrice = priceMap[item.symbol];
+                            updateCount++;
+                        }
+                    });
+                });
+
+                // Re-render all tables
+                Object.keys(portfolioData).forEach(category => {
+                    renderTable(category);
+                });
+
+                // Update timestamp
+                const now = new Date();
+                document.getElementById('lastUpdate').textContent = now.toLocaleTimeString('en-IN');
+
+                if (updateCount > 0) {
+                    alert(`✅ Successfully updated ${updateCount} live prices!`);
+                } else {
+                    alert('⚠️ Could not fetch live prices. Using cached values. Try again or check console for errors.');
+                }
+
+            } catch (error) {
+                console.error('Error fetching live prices:', error);
+                alert('❌ Failed to fetch live prices. Check console for details.');
+            }
+
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh Live Prices';
+            }
+        }
 
         function formatCurrency(num) {
             return '₹' + num.toLocaleString('en-IN', {maximumFractionDigits: 2});
@@ -428,9 +570,9 @@
                 row.innerHTML = `
                     <td><input type="text" value="${item.name}" onchange="updateData('${category}', ${index}, 'name', this.value)"></td>
                     <td><input type="number" value="${item.qty}" onchange="updateData('${category}', ${index}, 'qty', parseFloat(this.value))"></td>
-                    <td><input type="number" step="0.01" value="${item.avgPrice}" onchange="updateData('${category}', ${index}, 'avgPrice', parseFloat(this.value))"></td>
+                    <td><input type="number" step="0.01" value="${item.avgPrice.toFixed(2)}" onchange="updateData('${category}', ${index}, 'avgPrice', parseFloat(this.value))"></td>
                     <td>${formatCurrency(calc.investment)}</td>
-                    <td><input type="number" step="0.01" value="${item.currentPrice}" onchange="updateData('${category}', ${index}, 'currentPrice', parseFloat(this.value))"></td>
+                    <td><input type="number" step="0.01" value="${item.currentPrice.toFixed(2)}" class="live-price" readonly title="Live price from market"></td>
                     <td>${formatCurrency(calc.currentValue)}</td>
                     <td class="${calc.profit >= 0 ? 'profit-positive' : 'profit-negative'}">${formatCurrency(calc.profit)}</td>
                     <td class="${calc.profitPct >= 0 ? 'profit-positive' : 'profit-negative'}">${calc.profitPct.toFixed(2)}%</td>
@@ -465,11 +607,15 @@
         }
 
         function addRow(category) {
+            const defaultSymbol = category === 'silver' ? 'TATSILV.NS' : 
+                                 category === 'silverbees' ? 'SILVERBEES.NS' :
+                                 category === 'gold' ? 'TGOLD.NS' : 'GOLDBEES.NS';
             portfolioData[category].push({
                 name: 'New Position',
                 qty: 0,
                 avgPrice: 0,
-                currentPrice: 0
+                currentPrice: 0,
+                symbol: defaultSymbol
             });
             renderTable(category);
         }
@@ -532,7 +678,6 @@
                 };
             });
 
-            // Category Totals
             let categoryHTML = '';
             Object.keys(categoryStats).forEach(cat => {
                 const stats = categoryStats[cat];
@@ -547,7 +692,6 @@
             });
             document.getElementById('categoryTotals').innerHTML = categoryHTML;
 
-            // Top Performers
             allPositions.sort((a, b) => b.profitPct - a.profitPct);
             let performersHTML = '';
             allPositions.slice(0, 5).forEach((pos, i) => {
@@ -560,7 +704,6 @@
             });
             document.getElementById('topPerformers').innerHTML = performersHTML;
 
-            // Allocation
             const totalValue = Object.values(categoryStats).reduce((sum, cat) => sum + cat.value, 0);
             let allocationHTML = '';
             Object.keys(categoryStats).forEach(cat => {
@@ -591,6 +734,27 @@
         Object.keys(portfolioData).forEach(category => {
             renderTable(category);
         });
+
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('en-IN');
+
+        // Auto-fetch on load after 2 seconds
+        setTimeout(() => {
+            console.log('Auto-fetching live prices...');
+            fetchLivePrices();
+        }, 2000);
+
+        // Auto-refresh every 5 minutes during market hours
+        setInterval(() => {
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            const isMarketHours = (hours === 9 && minutes >= 15) || (hours > 9 && hours < 15) || (hours === 15 && minutes <= 30);
+
+            if (isMarketHours) {
+                console.log('Auto-refreshing prices (market hours)...');
+                fetchLivePrices();
+            }
+        }, 5 * 60 * 1000);
     </script>
 </body>
 </html>
