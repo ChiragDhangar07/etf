@@ -1,0 +1,713 @@
+<title>Price Action Desk — Nifty & Sensex Trainer</title>
+<style>
+  :root{
+    --bg:#0a0e15; --panel:#111826; --panel2:#0d1420; --rail:#0c111b;
+    --line:#1d293b; --line2:#141d2b;
+    --ink:#dbe4f0; --ink2:#aab6c8; --muted:#6f7d92;
+    --accent:#f5b544; --accent-dim:#8a6a24;
+    --bull:#22c07a; --bear:#f6465d;
+    --good:#22c07a; --bad:#f6465d; --info:#57a6ff;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;background:
+      radial-gradient(1200px 600px at 80% -10%,rgba(245,181,68,.05),transparent 60%),
+      var(--bg);
+    color:var(--ink);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent)}
+  .app{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+
+  /* ---------- Rail ---------- */
+  .rail{background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:100vh}
+  .brand{padding:18px 18px 14px;border-bottom:1px solid var(--line)}
+  .brand .tick{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--accent);font-weight:600}
+  .brand h1{margin:6px 0 2px;font-size:18px;letter-spacing:-.01em}
+  .brand p{margin:0;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
+  .prog{padding:12px 18px;border-bottom:1px solid var(--line)}
+  .prog .bar{height:6px;border-radius:6px;background:var(--line2);overflow:hidden}
+  .prog .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#ffd67a);transition:width .35s ease}
+  .prog .lbl{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:7px;letter-spacing:.04em}
+  nav{padding:8px 10px 24px;overflow-y:auto;flex:1}
+  .phase{margin:6px 0}
+  .phase>.ph{display:flex;gap:8px;align-items:baseline;padding:9px 8px 5px;font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+  .phase>.ph b{color:var(--accent-dim);font-weight:700}
+  .lesson{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:none;border:0;color:var(--ink2);
+    padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px;font-family:var(--sans);line-height:1.2}
+  .lesson:hover{background:#141d2b;color:var(--ink)}
+  .lesson.active{background:#17233a;color:#fff}
+  .lesson.active .dot{border-color:var(--accent)}
+  .lesson .dot{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--line);flex:0 0 auto;display:grid;place-items:center;font-size:9px;color:var(--bg)}
+  .lesson.done .dot{background:var(--good);border-color:var(--good)}
+  .lesson .k{font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:auto}
+  .lesson.active .k{color:var(--accent)}
+
+  /* ---------- Stage ---------- */
+  .stage{padding:26px 34px 60px;max-width:1080px;width:100%;margin:0 auto}
+  .crumbs{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+  .crumbs b{color:var(--accent)}
+  h2.title{margin:0 0 4px;font-size:26px;letter-spacing:-.02em;text-wrap:balance}
+  .concept{font-size:15px;color:var(--ink2);margin:0 0 18px;max-width:64ch;line-height:1.5}
+  .concept b{color:var(--ink);font-weight:600}
+
+  .chartwrap{position:relative;background:linear-gradient(180deg,#0d1420,#0b111a);border:1px solid var(--line);border-radius:12px;padding:6px}
+  .chartmeta{display:flex;gap:16px;align-items:center;padding:8px 12px 2px;font-family:var(--mono);font-size:11.5px;color:var(--ink2);flex-wrap:wrap}
+  .chartmeta .sym{color:#fff;font-weight:600;letter-spacing:.02em}
+  .chartmeta .tf{color:var(--muted)}
+  .chartmeta .sess{margin-left:auto;color:var(--accent);letter-spacing:.04em}
+  canvas{display:block;width:100%;height:420px;border-radius:8px;cursor:crosshair;touch-action:none}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;padding:6px 12px 4px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend i{width:9px;height:9px;border-radius:2px;display:inline-block}
+
+  /* ---------- Task panel ---------- */
+  .task{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .task .head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--line2);background:#0f1622}
+  .task .head .tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--bg);background:var(--accent);padding:3px 7px;border-radius:5px;font-weight:700}
+  .task .head .q{font-size:14px;color:var(--ink)}
+  .task .body{padding:16px}
+
+  .opts{display:grid;gap:9px}
+  .opt{display:flex;gap:11px;align-items:flex-start;text-align:left;background:#0e1420;border:1px solid var(--line);color:var(--ink2);
+    padding:12px 14px;border-radius:9px;cursor:pointer;font-size:13.5px;font-family:var(--sans);line-height:1.45;transition:.12s}
+  .opt:hover{border-color:#2c3b54;color:var(--ink)}
+  .opt.sel{border-color:var(--accent);background:#171f10;color:#fff}
+  .opt.correct{border-color:var(--good);background:rgba(34,192,122,.1)}
+  .opt.wrong{border-color:var(--bad);background:rgba(246,70,93,.09)}
+  .opt .mk{font-family:var(--mono);font-size:11px;color:var(--muted);flex:0 0 auto;margin-top:1px}
+
+  .instr{font-size:13px;color:var(--ink2);margin:0 0 12px;line-height:1.5}
+  .instr code{font-family:var(--mono);background:#0e1626;padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px}
+
+  .tradepad{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .biasbtn{font-family:var(--mono);font-size:12px;letter-spacing:.06em;padding:9px 16px;border-radius:8px;border:1px solid var(--line);background:#0e1420;color:var(--ink2);cursor:pointer}
+  .biasbtn.long.sel{border-color:var(--bull);background:rgba(34,192,122,.14);color:#eafff5}
+  .biasbtn.short.sel{border-color:var(--bear);background:rgba(246,70,93,.12);color:#ffeef0}
+  .levels{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+  .lvl{background:#0e1420;border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+  .lvl.active{border-color:var(--accent);box-shadow:0 0 0 1px rgba(245,181,68,.25) inset}
+  .lvl .n{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .lvl .v{font-family:var(--mono);font-size:18px;color:var(--ink);margin-top:3px}
+  .lvl.entry .v{color:var(--accent)} .lvl.stop .v{color:var(--bear)} .lvl.target .v{color:var(--bull)}
+
+  .ctl{display:flex;gap:10px;align-items:center;margin-top:14px;flex-wrap:wrap}
+  .btn{font-family:var(--sans);font-size:13px;font-weight:600;padding:10px 20px;border-radius:9px;border:1px solid transparent;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#1a1300}
+  .btn.primary:hover{background:#ffca5f}
+  .btn.ghost{background:transparent;border-color:var(--line);color:var(--ink2)}
+  .btn.ghost:hover{border-color:#33455f;color:var(--ink)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.next{background:transparent;border-color:var(--good);color:var(--good)}
+  .btn.next:hover{background:rgba(34,192,122,.12)}
+
+  .feedback{margin-top:14px;border-radius:9px;padding:13px 15px;font-size:13.5px;line-height:1.55;display:none}
+  .feedback.show{display:block}
+  .feedback.good{background:rgba(34,192,122,.08);border:1px solid rgba(34,192,122,.35);color:#c6f4de}
+  .feedback.bad{background:rgba(246,70,93,.07);border:1px solid rgba(246,70,93,.32);color:#ffd2d8}
+  .feedback .coach{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;display:block;margin-bottom:5px;opacity:.75}
+  .feedback b{color:#fff}
+
+  .note{margin-top:16px;border-top:1px solid var(--line2);padding-top:12px}
+  .note summary{cursor:pointer;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);list-style:none}
+  .note summary::-webkit-details-marker{display:none}
+  .note summary:before{content:"▸ ";color:var(--accent)}
+  .note[open] summary:before{content:"▾ "}
+  .note p{font-size:13px;color:var(--ink2);line-height:1.6;margin:10px 0 0;max-width:66ch}
+  .note p b{color:var(--ink)}
+
+  .foot{margin-top:34px;font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em;line-height:1.7}
+  @media (max-width:820px){
+    .app{grid-template-columns:1fr}
+    .rail{min-height:auto;position:sticky;top:0;z-index:5}
+    nav{max-height:0;padding:0 10px;overflow:hidden;transition:max-height .3s}
+    .rail.open nav{max-height:70vh;padding:8px 10px 20px}
+    .stage{padding:20px 16px 50px}
+    .levels{grid-template-columns:1fr}
+    canvas{height:340px}
+    .menutog{display:block}
+  }
+  .menutog{display:none;position:absolute;right:16px;top:20px;background:none;border:1px solid var(--line);color:var(--ink);border-radius:7px;padding:6px 10px;font-family:var(--mono);font-size:12px;cursor:pointer}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <aside class="rail" id="rail">
+    <div class="brand">
+      <div class="tick">NSE · BSE // PRICE-ACTION DESK</div>
+      <h1>Naked Chart Trainer</h1>
+      <p>Nifty 50 · Bank Nifty · Sensex</p>
+      <button class="menutog" id="menutog" aria-label="menu">☰</button>
+    </div>
+    <div class="prog">
+      <div class="bar"><i id="pbar"></i></div>
+      <div class="lbl"><span id="pcount">0 / 0 cleared</span><span id="ppct">0%</span></div>
+    </div>
+    <nav id="nav"></nav>
+  </aside>
+
+  <main class="stage">
+    <div class="crumbs" id="crumbs"></div>
+    <h2 class="title" id="ltitle"></h2>
+    <p class="concept" id="lconcept"></p>
+
+    <div class="chartwrap">
+      <div class="chartmeta">
+        <span class="sym" id="msym"></span>
+        <span class="tf" id="mtf"></span>
+        <span class="sess" id="msess"></span>
+      </div>
+      <canvas id="chart"></canvas>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <section class="task">
+      <div class="head"><span class="tag" id="ttag">TASK</span><span class="q" id="tq"></span></div>
+      <div class="body" id="tbody"></div>
+    </section>
+
+    <details class="note" id="note">
+      <summary>Coach's note — the deeper why</summary>
+      <p id="notep"></p>
+    </details>
+
+    <div class="foot">
+      DISCIPLINE &gt; PREDICTION &nbsp;·&nbsp; you don't get the next chart until you read this one right.<br>
+      Educational simulation only. Not investment advice. Markets are live risk.
+    </div>
+  </main>
+</div>
+
+<script>
+/* ============================ DATA ============================ */
+const C=(o,h,l,c)=>({o,h,l,c});
+
+// Phase-1 uptrend: clean HH/HL. Swing highs {2,6,10}, swing lows {4,8,12}. i0 low is edge (unconfirmable).
+const DS_UP=[
+ C(47870,47960,47850,47940),C(47960,48050,47950,48030),C(48030,48130,48010,48060),
+ C(48050,48060,47970,47990),C(47960,48010,47930,48000),C(48010,48180,48000,48150),
+ C(48190,48280,48180,48210),C(48210,48230,48060,48090),C(48090,48120,47990,48070),
+ C(48080,48320,48070,48300),C(48310,48430,48300,48350),C(48350,48360,48210,48250),
+ C(48240,48260,48120,48180),C(48190,48340,48180,48320)
+];
+// CHoCH set: uptrend, last higher-low = i4 (47950). First close below it = i8 -> CHoCH.
+const DS_CH=[
+ C(47870,47960,47850,47940),C(47950,48100,47940,48080),C(48080,48180,48050,48090),
+ C(48080,48090,47980,48010),C(47990,48030,47950,48010),C(48010,48260,48000,48230),
+ C(48240,48360,48230,48270),C(48260,48280,48120,48160),C(48150,48160,47930,47940),
+ C(47950,48000,47850,47880)
+];
+// Supply: rally, tight base (4,5), impulsive drop.
+const DS_SUP=[
+ C(47500,47560,47470,47540),C(47540,47660,47530,47640),C(47640,47760,47620,47740),
+ C(47740,47820,47720,47800),C(47800,47850,47780,47810),C(47810,47840,47790,47795),
+ C(47790,47800,47600,47620),C(47620,47660,47480,47500),C(47500,47560,47380,47400)
+];
+// Liquidity sweep: equal lows ~47750, candle 4 wicks to 47700 & closes back in -> reversal.
+const DS_SWP=[
+ C(47800,47850,47760,47780),C(47780,47820,47750,47800),C(47800,47840,47755,47770),
+ C(47770,47810,47752,47790),C(47790,47820,47700,47810),C(47810,47900,47800,47880),
+ C(47880,47960,47860,47940),C(47940,48010,47920,47990)
+];
+// Opening range (5-min). First 3 candles = 9:15/9:20/9:25. OR high 24090, OR low 23960.
+const DS_OR=[
+ C(24000,24080,23960,24040),C(24040,24090,24010,24030),C(24030,24075,24000,24060),
+ C(24060,24110,24050,24100),C(24100,24170,24085,24160),C(24160,24210,24140,24195),
+ C(24195,24230,24175,24220)
+];
+// Trade sim (long): demand base i3 (23990-24060), rally away, pullback taps it at i7.
+const DS_TL=[
+ C(24200,24230,24150,24170),C(24170,24190,24080,24100),C(24100,24120,24020,24040),
+ C(24040,24060,23990,24050),C(24050,24160,24040,24150),C(24150,24240,24130,24230),
+ C(24230,24250,24120,24140),C(24140,24150,24030,24060)
+];
+
+function deriveSwings(d){const H=[],L=[];for(let i=1;i<d.length-1;i++){
+  if(d[i].h>d[i-1].h&&d[i].h>d[i+1].h)H.push(i);
+  if(d[i].l<d[i-1].l&&d[i].l<d[i+1].l)L.push(i);}return{H,L};}
+
+/* ============================ LESSONS ============================ */
+const LESSONS=[
+{id:'p1l1',phase:1,pname:'Market Structure',title:'The Swing High',
+ sym:'BANKNIFTY',tf:'15m',sess:'confirmed pivots only',data:DS_UP,
+ concept:'A <b>swing high</b> is a candle whose high tops the candle on its left AND its right. It is not confirmed until the right-side candle prints lower — a high is not a high until the market rejects it.',
+ task:{type:'pick',derive:'H',
+   q:'Click every CONFIRMED swing high.',
+   instr:'Tap the candles that are true swing highs. The first candle can never be confirmed — it has no left neighbour.',
+   explain:'These three peaks each top both neighbours. Notice you could not confirm the very first candle — no left side, no confirmation. That is the discipline: you read what closed, not what you hope prints.'},
+ reveal:{markers:'H'},
+ note:'Retail draws swings by eye and front-runs them. We wait for the right-side candle to close. On Bank Nifty 15m the cleanest pivots of the day often form in the first 30 min after 9:15 once the GIFT Nifty cue is priced — those become the session\'s reference swings.'},
+
+{id:'p1l2',phase:1,pname:'Market Structure',title:'The Swing Low',
+ sym:'BANKNIFTY',tf:'15m',sess:'higher-lows building',data:DS_UP,
+ concept:'A <b>swing low</b> is the mirror: a candle whose low is beneath both neighbours. Rising swing lows = demand stepping in higher each time = the spine of an uptrend.',
+ task:{type:'pick',derive:'L',
+   q:'Click every CONFIRMED swing low.',
+   instr:'Same rule, inverted. The lowest candle here is the very first one — but it is unconfirmable. Leave it.',
+   explain:'Three confirmed higher-lows. The absolute lowest print is candle 1 — and you must NOT mark it, because it has no left neighbour to confirm the turn. Lowest ≠ swing low.'},
+ reveal:{markers:'L'},
+ note:'Each higher-low is a footprint of institutional demand absorbing supply at a better price than last time. When higher-lows stop forming, the uptrend\'s engine has stalled — that is your earliest warning, before any break.'},
+
+{id:'p1l3',phase:1,pname:'Market Structure',title:'Reading the Trend',
+ sym:'BANKNIFTY',tf:'15m',sess:'structure read',data:DS_UP,
+ concept:'Trend is not a feeling. <b>Uptrend</b> = Higher Highs + Higher Lows. <b>Downtrend</b> = Lower Highs + Lower Lows. <b>Range</b> = neither progresses cleanly.',
+ task:{type:'mc',q:'Read the structure. What is this?',
+   options:[
+    'Uptrend — Higher Highs stacked over Higher Lows',
+    'Downtrend — Lower Highs over Lower Lows',
+    'Range — highs and lows going nowhere',
+    'Not enough candles to call it'],
+   correct:0,
+   explain:'Three rising swing highs, three rising swing lows. That is a textbook uptrend. Your only job in an uptrend is to buy the higher-lows — never short into rising structure because a candle "looks tired".'},
+ note:'Bias is decided by structure BEFORE the open. If Bank Nifty is in HH/HL on the 15m and GIFT Nifty gaps it up, you hunt longs at demand — you do not fade strength. Trading against clean structure is how retail donates money.'},
+
+{id:'p1l4',phase:1,pname:'Market Structure',title:'Break of Structure (BOS)',
+ sym:'BANKNIFTY',tf:'15m',sess:'continuation break',data:DS_UP,
+ concept:'A <b>Break of Structure</b> is a candle that CLOSES beyond the most recent swing high (or low) in the trend\'s direction. It confirms continuation — the trend gets a fresh leg.',
+ task:{type:'pick',correct:[5],
+   q:'The first swing high sits at 48,130. Click the candle whose CLOSE confirms the BOS above it.',
+   instr:'A wick poking above does not count. You need a candle that CLOSES beyond 48,130.',
+   explain:'Candle 6 (index shown) closes at 48,150 — the first close above the 48,130 swing high. That is a confirmed BOS: the uptrend just told you it wants another leg. Wicks lie; closes commit.'},
+ reveal:{lines:[{price:48130,label:'prior SH 48130',color:'#57a6ff'}]},
+ note:'BOS = "trend confirmed, keep doing what works." It is a continuation signal, not a reversal. The trap is buying the BOS candle itself at the extreme — pros wait for the pullback to the broken level (now support) and buy the retest.'},
+
+{id:'p1l5',phase:1,pname:'Market Structure',title:'Change of Character (CHoCH)',
+ sym:'BANKNIFTY',tf:'15m',sess:'reversal warning',data:DS_CH,
+ concept:'<b>CHoCH</b> is the first crack against the trend: in an uptrend, the first candle to CLOSE below the last higher-low. BOS = continuation. CHoCH = the trend\'s character just changed.',
+ task:{type:'pick',correct:[8],
+   q:'The last higher-low sits at 47,950. Click the candle whose CLOSE breaks it — the CHoCH.',
+   instr:'You want the first close BELOW the protected higher-low, not just a wick into it.',
+   explain:'Candle 9 closes at 47,940 — the first close under the 47,950 higher-low. Buyers who defended every dip failed here. That is Change of Character: the earliest, highest-R signal that the uptrend may be done.'},
+ reveal:{lines:[{price:47950,label:'HL 47950 broken',color:'#f6465d'}]},
+ note:'CHoCH vs BOS is THE distinction. Break WITH the trend = BOS (continuation). Break AGAINST it = CHoCH (possible reversal). On Nifty, a 15m CHoCH after a strong trend often precedes the day\'s reversal — especially if Reliance/HDFC Bank print the same crack in sync.'},
+
+{id:'p2l1',phase:2,pname:'Institutional Zones',title:'The Supply Zone',
+ sym:'NIFTY FUT',tf:'15m',sess:'origin of imbalance',data:DS_SUP,
+ concept:'Institutions can\'t fill a huge sell order at one price. They build it in a <b>tight base</b>, then price drops violently. The base — not the exact high — is the <b>supply zone</b>: unfilled sell orders resting for the retest.',
+ task:{type:'pick',correct:[4,5],
+   q:'Click the candle(s) forming the SUPPLY zone — the base price departed FROM.',
+   instr:'Retail draws a line at the highest wick. We mark the tight consolidation right before the impulsive drop.',
+   explain:'Candles 5 & 6 are the tight base the market sold from before the impulsive leg down. THAT is the zone — a fresh area of unfilled supply. When price rallies back into it, sellers reload. The exact high is noise; the origin of the imbalance is the edge.'},
+ reveal:{zone:{i0:4,i1:5,label:'SUPPLY',color:'#f6465d'}},
+ note:'A zone beats a line because it gives you an area to react in AND a precise invalidation (a decisive close above the zone = it failed). "Resistance" is a retail line everyone sees and front-runs; a supply zone is where the actual orders live. Freshness matters — the first retest is highest probability; each subsequent tap eats the resting orders.'},
+
+{id:'p2l2',phase:2,pname:'Institutional Zones',title:'Retail S/R vs Real Zones',
+ sym:'NIFTY FUT',tf:'15m',sess:'edge check',data:DS_SUP,
+ concept:'Retail support/resistance is a horizontal line at obvious highs/lows — visible to everyone, so it gets swept. A real zone is defined by the <b>impulse away from it</b>, giving both a reaction area and a clean invalidation.',
+ task:{type:'mc',q:'Why does a supply zone outrank a horizontal resistance line?',
+   options:[
+    'It marks the origin of an order imbalance, giving a precise area to sell AND a clean invalidation level',
+    'Because more retail traders are watching it',
+    'Because it is drawn at the exact highest price of the move',
+    'Because it works on every timeframe automatically'],
+   correct:0,
+   explain:'A zone is the footprint of real orders — it tells you WHERE to react and exactly WHEN you are wrong (a decisive close through it). A retail line is just an obvious price that liquidity hunters love to sweep before reversing.'},
+ note:'The obvious line is a magnet, not a wall. Institutions push price THROUGH the retail line to trigger stops and fill their orders, THEN reverse from the true zone behind it. Trade the zone, expect the line to break first.'},
+
+{id:'p3l1',phase:3,pname:'Trap Setups',title:'The Liquidity Sweep',
+ sym:'BANKNIFTY',tf:'5m',sess:'stop hunt',data:DS_SWP,
+ concept:'Equal lows/highs = a pile of resting stops = <b>liquidity</b>. Smart money spikes price through that level to grab the fuel, then snaps back. The trap candle wicks beyond, then <b>closes back inside</b>.',
+ task:{type:'pick',correct:[4],
+   q:'Stops rest under the equal lows near 47,750. Click the candle that SWEEPS them and reverses.',
+   instr:'Look for the long wick that pierces below the lows but closes back above them.',
+   explain:'Candle 5 spikes to 47,700 — under every prior low — then closes back at 47,810. That long lower wick is the sweep: retail longs stopped out, retail shorts sucked in at the low, and price reverses up on their backs. The rejection close is the tell.'},
+ reveal:{lines:[{price:47752,label:'swept liquidity',color:'#f5b544'}]},
+ note:'This is the single most reliable Indian intraday setup. It clusters around 9:15–9:30 (opening stop-run) and again post 1:30pm. The confirmation is the CLOSE back inside the range plus a fast reclaim — never front-run the wick, wait for the reclaim.'},
+
+{id:'p3l2',phase:3,pname:'Trap Setups',title:'The Failed Breakout',
+ sym:'NIFTY',tf:'5m',sess:'trap logic',data:DS_SWP,
+ concept:'A <b>failed breakout</b> traps everyone who chased the move. Break out, fail, reverse hard — the trapped traders\' stops become the fuel for the move the other way.',
+ task:{type:'mc',q:'Price sweeps below equal lows then closes back inside on a strong bullish candle. What is the highest-probability play?',
+   options:[
+    'Go long on the reclaim — the breakdown was a trap; stop below the sweep wick',
+    'Go short — the lows broke, so it is bearish',
+    'Wait for price to break the lows a second time',
+    'Do nothing, it is random noise'],
+   correct:0,
+   explain:'The failed breakdown IS the signal. Shorts are trapped below, their stops sit just above — fuel for the squeeze up. You go long on the reclaim with a tight stop under the sweep wick. That wick is your invalidation and your edge.'},
+ note:'Rule of thumb: the more obvious the level, the more likely the first break is a trap. Big round numbers on Nifty (24,000 / 24,500) and Bank Nifty (48,000 / 48,500) are prime failed-breakout zones because that is where retail stops pile up.'},
+
+{id:'p4l1',phase:4,pname:'Indian Volatility',title:'The 9:15 Opening Range',
+ sym:'NIFTY',tf:'5m',sess:'09:15–09:30 IST',data:DS_OR,
+ concept:'The first 15 minutes (9:15–9:30) set the <b>Opening Range</b> — the day\'s initial battle zone. Its high and low become the session\'s tripwires: break and hold above = bullish day; below = bearish.',
+ task:{type:'level',target:24090,tol:22,
+   q:'Click at the OPENING RANGE HIGH — the top of the first three 5-min candles.',
+   instr:'Read the highs of the 9:15, 9:20 and 9:25 candles. Click the price level of the highest one.',
+   explain:'The OR high is 24,090 (the 9:20 candle). Price broke and held above it — a bullish opening drive. That level is now your intraday pivot: longs above it, caution below.'},
+ reveal:{lines:[{price:24090,label:'OR high 24090',color:'#22c07a'},{price:23960,label:'OR low 23960',color:'#f6465d'}]},
+ note:'9:15 is the most violent, least structured moment of the day — GIFT Nifty\'s overnight cue collides with domestic orders. Never trade the first candle blindly. Let the OR form, mark high & low, then trade the break-and-retest of it. Amateurs trade the open; professionals trade the reaction to it.'},
+
+{id:'p4l2',phase:4,pname:'Indian Volatility',title:'Gap-and-Go vs Gap-Fill',
+ sym:'NIFTY',tf:'5m',sess:'gap logic',data:DS_OR,
+ concept:'GIFT Nifty gaps the open. <b>Gap-and-Go</b>: strong candles hold the gap and trend away. <b>Gap-Fill</b>: weak open drifts back to close yesterday\'s gap. Read the first 15 minutes\' strength.',
+ task:{type:'mc',q:'GIFT Nifty is +180 overnight. Nifty gaps open ABOVE yesterday\'s high, the first 5-min candle closes strong at its highs, and it holds above the OR high. Which scenario?',
+   options:[
+    'Gap-and-Go — momentum confirmed; look to buy pullbacks to the OR high, not chase',
+    'Gap-Fill — it will drift back down to yesterday\'s close',
+    'Impossible to tell from price alone',
+    'Short it immediately, gaps always fill'],
+   correct:0,
+   explain:'Strong hold above the gap + OR high = Gap-and-Go. Institutions are supporting the higher prices. You buy the first pullback to the OR high (now support), you do NOT chase the extended candle. "Gaps always fill" is a retail myth that gets people run over on trend days.'},
+ note:'The tell is the FIRST retest. Gap-and-Go: the gap/OR-high holds as support on the first pullback. Gap-Fill: price slices back through it with no defence. On +GIFT strong-open days, HDFC Bank and Reliance gapping and holding in sync is your green light — heavyweights confirm the drive.'},
+
+{id:'p4l3',phase:4,pname:'Indian Volatility',title:'Heavyweight Sync',
+ sym:'NIFTY vs leaders',tf:'context',data:DS_UP,
+ concept:'Nifty & Bank Nifty are dragged by a handful of names. <b>Reliance, HDFC Bank, ICICI</b> move the index. When the index and its leaders disagree, believe the leaders.',
+ task:{type:'mc',q:'Nifty pokes to a new high, BUT Reliance and HDFC Bank both stall at their own supply and Bank Nifty prints a LOWER high. What is the read?',
+   options:[
+    'Bearish divergence — the breakout lacks leadership; fade it / expect rejection',
+    'Bullish — new index high is all that matters',
+    'Neutral — leaders are irrelevant to the index',
+    'Buy the Nifty breakout aggressively'],
+   correct:0,
+   explain:'An index high with NO participation from its heavyweights is a hollow breakout. If Reliance and HDFC Bank stall and Bank Nifty makes a lower high, the move has no engine. That divergence is a high-probability fade — the index follows its leaders, not the other way round.'},
+ note:'Build a mental correlation matrix every morning: Nifty ↔ Bank Nifty ↔ Reliance ↔ HDFC Bank. Confluence (all aligned) = high conviction. Divergence (index vs leaders) = fade or stand aside. Bank Nifty leading Nifty at a turn is one of the most reliable intraday tells on the NSE.'},
+
+{id:'p5l1',phase:5,pname:'Live Execution',title:'Simulation — The Demand Tap',
+ sym:'NIFTY FUT',tf:'15m',sess:'LIVE · your call',data:DS_TL,
+ concept:'Everything comes together. Price dropped, based at a <b>demand zone (23,990–24,060)</b>, rallied away to a swing high at <b>24,240</b>, and has now pulled back to tap the zone. Execute.',
+ task:{type:'trade',bias:'long',
+   zone:{top:24060,bottom:23990},swingHigh:24240,
+   entry:[23990,24080],stopBelow:23990,stopFloor:23900,targetMin:24200,minR:1.8,
+   q:'Take the trade: pick bias, then click your ENTRY, STOP and TARGET on the chart.',
+   instr:'The demand zone is 23,990–24,060. The prior swing high is 24,240. Choose your bias, then place three levels. You need at least 1.8R to justify the trade.',
+   explain:'Textbook long: enter on the tap of demand (~24,050), stop just below the zone low (~23,960 — where the setup is invalid), target the prior swing high (24,240). That is ~2.1R of asymmetry. Bias long, stop below the zone, target the resistance — anything else is guessing.'},
+ reveal:{zone:{i0:3,i1:3,label:'DEMAND',color:'#22c07a'},lines:[{price:24240,label:'target · swing high',color:'#22c07a'}]},
+ note:'This is the whole curriculum in one chart: structure (uptrend), zone (fresh demand), trap avoided (no chasing), execution (defined R). If R:R is under ~1.8, the trade is not worth the screen time — no setup, no trade. Process over prediction, every session.'}
+];
+
+/* ============================ ENGINE ============================ */
+const cv=document.getElementById('chart'), ctx=cv.getContext('2d');
+let CUR=0, chart=null;
+let sel=new Set(); // picked candle indices
+let placed=null;   // level task price
+let mc=null;       // chosen MC index
+let trade={bias:null,entry:null,stop:null,target:null,step:'entry'};
+let solved={};
+
+const store={
+  get(){try{return JSON.parse(localStorage.getItem('pa-progress')||'{}')}catch(e){return{}}},
+  set(o){localStorage.setItem('pa-progress',JSON.stringify(o))}
+};
+solved=store.get();
+
+/* ---- draw ---- */
+function fit(){
+  const r=cv.getBoundingClientRect(), dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {w:r.width,h:r.height};
+}
+function scales(d,w,h){
+  const padL=8,padR=64,padT=14,padB=24;
+  let mn=Infinity,mx=-Infinity;
+  d.forEach(c=>{mn=Math.min(mn,c.l);mx=Math.max(mx,c.h)});
+  const pad=(mx-mn)*0.14; mn-=pad; mx+=pad;
+  const plotW=w-padL-padR, plotH=h-padT-padB, step=plotW/d.length;
+  const xC=i=>padL+step*(i+0.5);
+  const yP=p=>padT+(mx-p)/(mx-mn)*plotH;
+  const pY=y=>mx-(y-padT)/plotH*(mx-mn);
+  const iX=x=>Math.max(0,Math.min(d.length-1,Math.round((x-padL)/step-0.5)));
+  return {padL,padR,padT,padB,plotW,plotH,step,mn,mx,xC,yP,pY,iX,w,h};
+}
+function draw(){
+  const L=LESSONS[CUR], d=L.data, {w,h}=fit();
+  ctx.clearRect(0,0,w,h);
+  const s=scales(d,w,h); chart=s;
+
+  // grid + price axis
+  ctx.font='10px ui-monospace,monospace'; ctx.textBaseline='middle';
+  const ticks=5;
+  for(let i=0;i<=ticks;i++){
+    const p=s.mn+(s.mx-s.mn)*i/ticks, y=s.yP(p);
+    ctx.strokeStyle='#141d2b'; ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(s.padL,y);ctx.lineTo(w-s.padR,y);ctx.stroke();
+    ctx.fillStyle='#4d5b70'; ctx.textAlign='left';
+    ctx.fillText(Math.round(p).toLocaleString('en-IN'),w-s.padR+6,y);
+  }
+
+  const isSolved=!!solved[L.id];
+
+  // reveal underlays (zones/lines) once solved
+  if(isSolved&&L.reveal){
+    if(L.reveal.zone){const z=L.reveal.zone,a=Math.min(z.i0,z.i1),b=Math.max(z.i0,z.i1);
+      const top=Math.max(...d.slice(a,b+1).map(c=>c.h)), bot=Math.min(...d.slice(a,b+1).map(c=>c.l));
+      const y1=s.yP(top),y2=s.yP(bot);
+      ctx.fillStyle=hexA(z.color,.12); ctx.fillRect(s.padL,y1,w-s.padR-s.padL,y2-y1);
+      ctx.strokeStyle=hexA(z.color,.5);ctx.setLineDash([4,3]);
+      ctx.strokeRect(s.padL,y1,w-s.padR-s.padL,y2-y1);ctx.setLineDash([]);
+      ctx.fillStyle=z.color;ctx.textAlign='left';ctx.font='9px ui-monospace,monospace';
+      ctx.fillText(z.label,s.padL+6,y1+8);
+    }
+    (L.reveal.lines||[]).forEach(ln=>{
+      const y=s.yP(ln.price);
+      ctx.strokeStyle=hexA(ln.color,.8);ctx.lineWidth=1.2;ctx.setLineDash([6,4]);
+      ctx.beginPath();ctx.moveTo(s.padL,y);ctx.lineTo(w-s.padR,y);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=ln.color;ctx.textAlign='left';ctx.font='9px ui-monospace,monospace';
+      ctx.fillText(ln.label,s.padL+6,y-6);
+    });
+  }
+
+  // candles
+  const cw=Math.max(3,s.step*0.58);
+  d.forEach((c,i)=>{
+    const x=s.xC(i), up=c.c>=c.o, col=up?'#22c07a':'#f6465d';
+    if(sel.has(i)){ // selection highlight
+      ctx.fillStyle='rgba(245,181,68,.12)';
+      ctx.fillRect(x-s.step/2,s.padT,s.step,s.plotH);
+      ctx.strokeStyle='#f5b544';ctx.lineWidth=1;
+      ctx.strokeRect(x-cw/2-3,s.yP(c.h)-3,cw+6,s.yP(c.l)-s.yP(c.h)+6);
+    }
+    ctx.strokeStyle=col;ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(x,s.yP(c.h));ctx.lineTo(x,s.yP(c.l));ctx.stroke();
+    const yo=s.yP(c.o),yc=s.yP(c.c),bh=Math.max(1.5,Math.abs(yc-yo));
+    ctx.fillStyle=col;ctx.fillRect(x-cw/2,Math.min(yo,yc),cw,bh);
+  });
+
+  // swing markers reveal
+  if(isSolved&&L.reveal&&L.reveal.markers){
+    const sw=deriveSwings(d), arr=L.reveal.markers==='H'?sw.H:sw.L;
+    arr.forEach(i=>{
+      const c=d[i],x=s.xC(i);
+      const y=L.reveal.markers==='H'?s.yP(c.h)-9:s.yP(c.l)+9;
+      ctx.fillStyle='#f5b544';ctx.textAlign='center';ctx.font='bold 10px ui-monospace,monospace';
+      ctx.fillText(L.reveal.markers==='H'?'▼':'▲',x,y);
+    });
+  }
+
+  // trade placed levels
+  if(L.task.type==='trade'){
+    const drawL=(p,color,lbl)=>{if(p==null)return;const y=s.yP(p);
+      ctx.strokeStyle=color;ctx.lineWidth=1.4;ctx.setLineDash([5,4]);
+      ctx.beginPath();ctx.moveTo(s.padL,y);ctx.lineTo(w-s.padR,y);ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle=color;ctx.textAlign='left';ctx.font='9px ui-monospace,monospace';
+      ctx.fillText(lbl+' '+Math.round(p),s.padL+6,y-5);};
+    // demand zone hint (always visible for the sim)
+    if(L.task.zone){const y1=s.yP(L.task.zone.top),y2=s.yP(L.task.zone.bottom);
+      ctx.fillStyle='rgba(34,192,122,.10)';ctx.fillRect(s.padL,y1,w-s.padR-s.padL,y2-y1);
+      ctx.fillStyle='#22c07a';ctx.font='9px ui-monospace,monospace';ctx.textAlign='left';
+      ctx.fillText('DEMAND '+L.task.zone.bottom+'–'+L.task.zone.top,s.padL+6,y1-5);}
+    drawL(trade.entry,'#f5b544','ENTRY');
+    drawL(trade.stop,'#f6465d','STOP');
+    drawL(trade.target,'#22c07a','TARGET');
+  }
+  // level task placed marker
+  if(L.task.type==='level'&&placed!=null){
+    const y=s.yP(placed);
+    ctx.strokeStyle='#f5b544';ctx.lineWidth=1.4;ctx.setLineDash([5,4]);
+    ctx.beginPath();ctx.moveTo(s.padL,y);ctx.lineTo(w-s.padR,y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#f5b544';ctx.textAlign='left';ctx.font='9px ui-monospace,monospace';
+    ctx.fillText('you: '+Math.round(placed),s.padL+6,y-5);
+  }
+}
+function hexA(hex,a){const n=parseInt(hex.slice(1),16);return`rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+
+/* ---- interaction ---- */
+function canvasXY(e){const r=cv.getBoundingClientRect();
+  const p=e.touches?e.touches[0]:e;return{x:p.clientX-r.left,y:p.clientY-r.top};}
+cv.addEventListener('click',e=>{
+  const L=LESSONS[CUR]; if(solved[L.id]&&L.task.type!=='trade')return;
+  const {x,y}=canvasXY(e); if(!chart)return;
+  const t=L.task;
+  if(t.type==='pick'){const i=chart.iX(x); sel.has(i)?sel.delete(i):sel.add(i);}
+  else if(t.type==='level'){placed=Math.round(chart.pY(y));}
+  else if(t.type==='trade'){
+    if(!trade.bias)return;
+    const p=Math.round(chart.pY(y));
+    trade[trade.step]=p;
+    trade.step = trade.step==='entry'?'stop':trade.step==='stop'?'target':'target';
+    renderTradePad();
+  }
+  draw();
+});
+
+/* ============================ UI RENDER ============================ */
+function buildNav(){
+  const nav=document.getElementById('nav'); nav.innerHTML='';
+  let ph=0;
+  LESSONS.forEach((L,idx)=>{
+    if(L.phase!==ph){ph=L.phase;
+      const h=document.createElement('div');h.className='phase';
+      h.innerHTML=`<div class="ph"><b>P${L.phase}</b> ${L.pname}</div>`;
+      nav.appendChild(h);
+    }
+    const b=document.createElement('button');
+    b.className='lesson'+(idx===CUR?' active':'')+(solved[L.id]?' done':'');
+    b.innerHTML=`<span class="dot">${solved[L.id]?'✓':''}</span><span>${L.title}</span><span class="k">L${L.phase}.${lessonNo(idx)}</span>`;
+    b.onclick=()=>{CUR=idx;loadLesson();};
+    nav.appendChild(b);
+  });
+  const done=Object.keys(solved).filter(k=>solved[k]).length, tot=LESSONS.length;
+  const pct=Math.round(done/tot*100);
+  document.getElementById('pbar').style.width=pct+'%';
+  document.getElementById('pcount').textContent=`${done} / ${tot} cleared`;
+  document.getElementById('ppct').textContent=pct+'%';
+}
+function lessonNo(idx){let n=0;for(let i=0;i<=idx;i++)if(LESSONS[i].phase===LESSONS[idx].phase)n++;return n;}
+
+function loadLesson(){
+  const L=LESSONS[CUR];
+  sel=new Set(); placed=null; mc=null;
+  trade={bias:null,entry:null,stop:null,target:null,step:'entry'};
+  document.getElementById('crumbs').innerHTML=`Phase ${L.phase} · <b>${L.pname}</b> · Lesson ${L.phase}.${lessonNo(CUR)}`;
+  document.getElementById('ltitle').textContent=L.title;
+  document.getElementById('lconcept').innerHTML=L.concept;
+  document.getElementById('msym').textContent=L.sym;
+  document.getElementById('mtf').textContent=L.tf;
+  document.getElementById('msess').textContent='● '+L.sess;
+  document.getElementById('ttag').textContent=L.task.type==='trade'?'SIMULATION':L.task.type==='mc'?'QUIZ':'TASK';
+  document.getElementById('tq').textContent=L.task.q;
+  document.getElementById('notep').innerHTML=L.note;
+  buildLegend(L); buildTask(L); buildNav();
+  requestAnimationFrame(draw);
+  document.querySelector('.stage').scrollTo?.(0,0);
+  window.scrollTo(0,0);
+}
+function buildLegend(L){
+  const el=document.getElementById('legend');
+  let h='<span><i style="background:#22c07a"></i>bull close</span><span><i style="background:#f6465d"></i>bear close</span>';
+  if(L.task.type==='pick')h+='<span><i style="background:#f5b544"></i>your selection — click candles</span>';
+  if(L.task.type==='level')h+='<span><i style="background:#f5b544"></i>click the chart to place your level</span>';
+  if(L.task.type==='trade')h+='<span><i style="background:#22c07a"></i>demand zone (given)</span>';
+  el.innerHTML=h;
+}
+
+function buildTask(L){
+  const t=L.task, body=document.getElementById('tbody'); body.innerHTML='';
+  const done=!!solved[L.id];
+
+  if(t.type==='mc'){
+    const wrap=div('opts');
+    t.options.forEach((o,i)=>{
+      const b=document.createElement('button');b.className='opt';
+      b.innerHTML=`<span class="mk">${String.fromCharCode(65+i)}</span><span>${o}</span>`;
+      b.onclick=()=>{if(solved[L.id])return;mc=i;[...wrap.children].forEach(c=>c.classList.remove('sel'));b.classList.add('sel');};
+      wrap.appendChild(b);
+    });
+    body.appendChild(wrap);
+  }
+  else if(t.type==='pick'||t.type==='level'){
+    body.appendChild(p_instr(t.instr));
+  }
+  else if(t.type==='trade'){
+    body.appendChild(p_instr(t.instr));
+    const pad=div('tradepad');pad.id='biaswrap';
+    ['long','short'].forEach(b=>{
+      const btn=document.createElement('button');btn.className='biasbtn '+b;
+      btn.textContent=b==='long'?'▲ LONG':'▼ SHORT';
+      btn.onclick=()=>{if(solved[L.id])return;trade.bias=b;trade.step='entry';
+        [...pad.children].forEach(c=>c.classList.remove('sel'));btn.classList.add('sel');renderTradePad();};
+      pad.appendChild(btn);
+    });
+    body.appendChild(pad);
+    const lv=div('levels');lv.id='lvls';
+    lv.innerHTML=lvlCard('entry','Entry')+lvlCard('stop','Stop-loss')+lvlCard('target','Target');
+    body.appendChild(lv);
+  }
+
+  const ctl=div('ctl');
+  const check=document.createElement('button');check.className='btn primary';check.textContent='Check answer';
+  check.onclick=()=>grade(L);
+  const reset=document.createElement('button');reset.className='btn ghost';reset.textContent='Reset';
+  reset.onclick=()=>{loadLesson();};
+  ctl.appendChild(check);ctl.appendChild(reset);
+  if(CUR<LESSONS.length-1){
+    const nx=document.createElement('button');nx.className='btn next';nx.id='nextbtn';nx.textContent='Next lesson →';
+    nx.style.marginLeft='auto';nx.disabled=!done;
+    nx.onclick=()=>{CUR++;loadLesson();};
+    ctl.appendChild(nx);
+  }
+  body.appendChild(ctl);
+
+  const fb=div('feedback');fb.id='fb';body.appendChild(fb);
+  if(done){revealSolved(L);}
+  if(t.type==='trade')renderTradePad();
+}
+function lvlCard(k,n){return`<div class="lvl ${k}" id="lvl-${k}"><div class="n">${n}</div><div class="v" id="v-${k}">—</div></div>`;}
+function renderTradePad(){
+  ['entry','stop','target'].forEach(k=>{
+    const c=document.getElementById('lvl-'+k),v=document.getElementById('v-'+k);
+    if(!c)return;
+    v.textContent=trade[k]!=null?Number(trade[k]).toLocaleString('en-IN'):'—';
+    c.classList.toggle('active',trade.bias&&trade.step===k);
+  });
+}
+function p_instr(txt){const p=document.createElement('p');p.className='instr';p.innerHTML=txt;return p;}
+function div(c){const d=document.createElement('div');d.className=c;return d;}
+
+/* ---- grading ---- */
+function grade(L){
+  const t=L.task, fb=document.getElementById('fb');
+  let ok=false, msg='';
+  if(t.type==='mc'){
+    if(mc==null){return flash(fb,false,'Pick an option first.','No decision is a decision — and it costs you.');}
+    ok=mc===t.correct;
+    [...document.querySelectorAll('.opt')].forEach((o,i)=>{
+      if(i===t.correct)o.classList.add('correct');
+      if(i===mc&&!ok)o.classList.add('wrong');
+    });
+    msg=t.explain;
+  }
+  else if(t.type==='pick'){
+    const correct=t.derive?(t.derive==='H'?deriveSwings(L.data).H:deriveSwings(L.data).L):t.correct;
+    const a=[...sel].sort((x,y)=>x-y), b=[...correct].sort((x,y)=>x-y);
+    ok=a.length===b.length&&a.every((v,i)=>v===b[i]);
+    if(!ok){
+      const missed=b.filter(i=>!sel.has(i)).length, extra=a.filter(i=>!correct.includes(i)).length;
+      msg=(extra?`You marked ${extra} candle(s) that don't qualify. `:'')+(missed?`You missed ${missed}. `:'')+'Re-read the rule — both neighbours must confirm.';
+      return flash(fb,false,msg,'Sloppy tagging = sloppy trading.');
+    }
+    msg=t.explain;
+  }
+  else if(t.type==='level'){
+    if(placed==null){return flash(fb,false,'Click the chart to place your level first.','');}
+    ok=Math.abs(placed-t.target)<=t.tol;
+    if(!ok){msg=`You placed ${placed.toLocaleString('en-IN')}. Off target. Read the candle highs again.`;
+      return flash(fb,false,msg,'Precision is the edge.');}
+    msg=t.explain;
+  }
+  else if(t.type==='trade'){
+    const r=judgeTrade(t);
+    ok=r.ok; msg=r.msg+(ok?' '+t.explain:'');
+    if(!ok)return flash(fb,false,r.msg,'A trade without defined risk is a donation.');
+  }
+
+  if(ok){
+    flash(fb,true,msg,'Cleared. Next.');
+    if(!solved[L.id]){solved[L.id]=true;store.set(solved);}
+    revealSolved(L); buildNav();
+    const nb=document.getElementById('nextbtn'); if(nb)nb.disabled=false;
+  }
+}
+function judgeTrade(t){
+  if(!trade.bias)return{ok:false,msg:'Choose a bias first — long or short.'};
+  if(trade.bias!==t.bias)return{ok:false,msg:`You chose ${trade.bias.toUpperCase()}. Wrong side. This is fresh demand inside an uptrend — you buy support, you don't short it.`};
+  if(trade.entry==null||trade.stop==null||trade.target==null)return{ok:false,msg:'Place all three: entry, stop and target.'};
+  if(trade.stop>=t.stopBelow)return{ok:false,msg:`Your stop at ${trade.stop} sits inside/above the demand zone. It must go BELOW ${t.stopBelow} — where the setup is truly invalid.`};
+  if(trade.stop<t.stopFloor)return{ok:false,msg:`Stop at ${trade.stop} is too wide — you're bleeding R for no reason. Tuck it just under the zone.`};
+  if(trade.entry<t.entry[0]||trade.entry>t.entry[1])return{ok:false,msg:`Entry ${trade.entry} isn't at the zone tap. Enter into the demand (${t.entry[0]}–${t.entry[1]}), not chasing away from it.`};
+  if(trade.target<t.targetMin)return{ok:false,msg:`Target ${trade.target} is timid. The prior swing high near ${t.swingHigh} is the logical objective.`};
+  const R=(trade.target-trade.entry)/(trade.entry-trade.stop);
+  if(R<t.minR)return{ok:false,msg:`Your risk:reward is ${R.toFixed(2)}R — under the ${t.minR}R floor. Tighten the stop or extend the target.`};
+  return{ok:true,msg:`Clean execution — ${R.toFixed(2)}R.`};
+}
+function flash(fb,good,msg,coach){
+  fb.className='feedback show '+(good?'good':'bad');
+  fb.innerHTML=`<span class="coach">${good?'✓ Coach':'✕ Coach'} — ${coach}</span>${msg}`;
+}
+function revealSolved(L){
+  const t=L.task;
+  if(t.type==='pick'){const c=t.derive?(t.derive==='H'?deriveSwings(L.data).H:deriveSwings(L.data).L):t.correct;sel=new Set(c);}
+  if(t.type==='mc'){mc=t.correct;[...document.querySelectorAll('.opt')].forEach((o,i)=>{if(i===t.correct)o.classList.add('correct');});}
+  if(t.type==='level')placed=t.target;
+  const fb=document.getElementById('fb'); if(fb&&!fb.classList.contains('show'))flash(fb,true,t.explain,'Cleared earlier. Review below.');
+  draw();
+}
+
+document.getElementById('menutog').onclick=()=>document.getElementById('rail').classList.toggle('open');
+window.addEventListener('resize',()=>requestAnimationFrame(draw));
+loadLesson();
+</script>
