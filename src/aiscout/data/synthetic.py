@@ -104,6 +104,7 @@ def _simulate_symbol(rng, sid, dates, mkt_ret, mkt_vol, beta, p0, turn_cr,
     n = len(dates)
     state = NORMAL
     state_left = 0
+    accum_len = 1
     ignite_pending = False
 
     idio_vol = _garch_lite(rng, n, base=rng.uniform(0.012, 0.03), persist=0.9)
@@ -123,8 +124,11 @@ def _simulate_symbol(rng, sid, dates, mkt_ret, mkt_vol, beta, p0, turn_cr,
                 state, state_left = NORMAL, rng.integers(20, 80)
             else:  # NORMAL -> maybe start accumulation
                 if rng.random() < 0.02:
-                    state, state_left = ACCUM, rng.integers(8, 25)
-                    ignite_pending = rng.random() < 0.45   # 45% of accums ignite
+                    # keep accumulation short so its footprint sits inside the
+                    # label horizon (ignition lands within ~10 trading days)
+                    accum_len = int(rng.integers(4, 11))
+                    state, state_left = ACCUM, accum_len
+                    ignite_pending = rng.random() < 0.60   # 60% of accums ignite
                 else:
                     state, state_left = NORMAL, rng.integers(5, 20)
         state_left -= 1
@@ -132,9 +136,11 @@ def _simulate_symbol(rng, sid, dates, mkt_ret, mkt_vol, beta, p0, turn_cr,
         # ---- returns by state ----
         base = beta * mkt_ret[t]
         if state == ACCUM:
-            prog = 1.0  # footprint present during accumulation
-            drift = 0.0005                       # slight quiet up-drift
-            vol_mult = 0.65                      # volatility CONTRACTION (the coil)
+            # footprint STRENGTHENS toward ignition: late-accum days (which are the
+            # ones the label marks positive) carry the clearest signature.
+            prog = 0.35 + 0.65 * (1 - max(state_left, 0) / max(accum_len, 1))
+            drift = 0.0007 * prog                # quiet up-drift, building
+            vol_mult = 0.60                      # volatility CONTRACTION (the coil)
             accum_intensity[t] = prog
         elif state == IGNITE:
             drift = rng.uniform(0.012, 0.030)    # the explosive up-move
@@ -169,16 +175,16 @@ def _simulate_symbol(rng, sid, dates, mkt_ret, mkt_vol, beta, p0, turn_cr,
     # ---- volume & delivery% (footprint carriers) ----
     # volume: base + reaction to |ret|, dry-up early in accumulation then spike
     react = np.abs(log_ret) / (idio_vol + 1e-9)
-    accum_dryup = -0.4 * accum_intensity            # dry-up during accumulation
+    accum_dryup = -0.55 * accum_intensity           # dry-up during accumulation
     ignite_boost = 1.2 * ignite_flag
     base_vol = (turn_cr * 1e7) / np.maximum(close, 1)   # shares from turnover
     vol_mult = np.exp(0.5 * react + accum_dryup + ignite_boost
-                      + rng.normal(0, 0.35, n))
+                      + rng.normal(0, 0.30, n))
     volume = np.maximum(base_vol * vol_mult, 100).astype(np.int64)
 
     # delivery%: elevated during genuine accumulation (conviction), lower in churn
-    deliv = (45 + 25 * accum_intensity + 10 * ignite_flag
-             - 8 * (react > 1.5) + rng.normal(0, 6, n))
+    deliv = (44 + 34 * accum_intensity + 10 * ignite_flag
+             - 8 * (react > 1.5) + rng.normal(0, 5, n))
     deliv = np.clip(deliv, 8, 95)
 
     return pd.DataFrame({

@@ -1,0 +1,14 @@
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# local data caches / scratch
+data_cache/
+*.parquet
+
+# transient render artifacts (keep dashboard.html + results.json)
+outputs/*.png
+outputs/_dark.html
+outputs/results_live.json

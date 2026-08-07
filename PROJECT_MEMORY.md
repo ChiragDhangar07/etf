@@ -60,20 +60,37 @@ confidence.
 
 ## 2. Current project state (rolling)
 
-**Phase 0 — Research Foundation (IN PROGRESS)**
+**Phases 0–3 — Research Foundation + working end-to-end prototype (DONE, on synthetic data)**
 
 Completed:
 - Locked D1–D6 (see above).
-- Authored the research foundation under `docs/`:
-  - `docs/README.md` — index + phased roadmap
-  - `docs/00-problem-definition-and-labeling.md` — what "explosive" means, label spec
-  - `docs/01-data-sources-india.md` — free India data map + reliability/legality notes
-  - `docs/02-feature-catalog.md` — candidate predictive features by tier
-  - `docs/03-models-and-validation.md` — model survey + leakage-safe validation
-  - `docs/04-architecture.md` — the continuously-thinking system design
+- Authored the research foundation under `docs/` (00 problem+labeling, 01 data,
+  02 features, 03 models+validation, 04 architecture).
+- Built the full **AIScout** pipeline in `src/aiscout/` and ran it end-to-end:
+  data → 29 point-in-time features → triple-barrier labels (+ tradability gate) →
+  purged/embargoed walk-forward → rule/logistic/GBM + **ensemble** (calibrated) →
+  regime-stratified metrics → locked holdout → India cost-aware backtest →
+  explainable alerts → self-contained HTML dashboard (`report.py`).
+- **Demonstration run (SYNTHETIC data, 120×1200):** ensemble is the production
+  scorer at **OOS lift 1.54×** (ROC 0.60), beating logistic 1.51×, rule 1.34×,
+  GBM 1.33×; **locked holdout lift 1.58×**; edge present in **all regimes**
+  (bear 1.52× / bull 1.48× / sideways 1.65×); cost-aware backtest equity 1.00→1.35
+  but **thin post-cost** (Sharpe 0.44, PF 1.07, maxDD −39%) — an honest lesson that
+  modest lift barely survives costs with naïve sizing.
+- Live adapter (`data/yahoo.py`) + `scripts/run_live.py` ready for real NSE data
+  where the network permits (the dev sandbox blocks market hosts → demo is synthetic).
 
-Not yet started: data ingestion prototype, universe construction, empirical
-move-distribution study, baseline model, backtest harness.
+**CRITICAL HONESTY NOTE:** All quantitative results to date are on a **synthetic
+market simulator I control**. They prove the pipeline works and can learn signal
+*that exists by construction*. They are **NOT** evidence of a real-market edge.
+Real performance is UNKNOWN until `run_live.py` is run on genuine NSE history.
+
+Dashboard: `outputs/dashboard.html` (+ Artifact URL in changelog).
+
+Not yet started (next): real-data ingestion + point-in-time store (U1/A4),
+empirical move-distribution study to replace PLACEHOLDER thresholds (U2–U4),
+bhavcopy/delivery + FII-DII + OI enrichment, meta-labeling, drift monitor,
+paper-trade ledger.
 
 ---
 
@@ -150,3 +167,11 @@ always distinguished. No fabricated results, ever.
 ## 8. Changelog
 
 - 2026-08-06: Project kicked off. D1–D6 locked. Phase 0 research foundation authored.
+- 2026-08-06: Built full AIScout pipeline (`src/aiscout/`), ran end-to-end on
+  synthetic data, produced HTML dashboard. Key honest result: ensemble OOS lift
+  ~1.5× that generalizes to a locked holdout and across regimes, but a thin
+  post-cost backtest. Dashboard Artifact:
+  https://claude.ai/code/artifact/58815698-c6d4-4a30-8df0-b1a2cf753cfb
+  Discovered + fixed a validation perf bug (np.isin on datetimes → integer date
+  codes). Sandbox blocks live market feeds, so the demo is synthetic; `run_live.py`
+  targets real NSE data elsewhere.

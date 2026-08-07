@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 class LabelConfig:
     """Triple-barrier labeling (docs/00)."""
     horizon_days: int = 10          # vertical barrier H (<= 10 trading days)
-    k_up_atr: float = 2.5           # PLACEHOLDER upper barrier = k * ATR%20  -> explosive
+    k_up_atr: float = 3.0           # PLACEHOLDER upper barrier = k * ATR%20  -> explosive
     m_down_atr: float = 1.5         # PLACEHOLDER lower barrier = m * ATR%20  -> stop
     atr_window: int = 20
     entry: str = "next_open"        # trade entered at next day's open (no look-ahead)
@@ -62,17 +62,21 @@ class ValidationConfig:
 
 @dataclass(frozen=True)
 class ModelConfig:
+    # Heavily regularized: on low signal-to-noise financial data a deep GBM just
+    # memorizes noise. Shallow trees + strong bagging/L2 generalize far better.
     lgbm_params: dict = field(default_factory=lambda: {
         "objective": "binary",
-        "n_estimators": 300,
-        "learning_rate": 0.03,
-        "num_leaves": 31,
-        "max_depth": -1,
-        "min_child_samples": 60,
-        "subsample": 0.8,
+        "n_estimators": 220,
+        "learning_rate": 0.02,
+        "num_leaves": 12,
+        "max_depth": 4,
+        "min_child_samples": 150,
+        "subsample": 0.7,
         "subsample_freq": 1,
-        "colsample_bytree": 0.8,
-        "reg_lambda": 1.0,
+        "colsample_bytree": 0.6,
+        "reg_lambda": 6.0,
+        "reg_alpha": 1.0,
+        "min_split_gain": 0.001,
         "random_state": 7,
         "n_jobs": -1,
         "verbose": -1,

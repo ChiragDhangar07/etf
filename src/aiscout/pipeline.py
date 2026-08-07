@@ -66,22 +66,32 @@ def run(panel: pd.DataFrame, index_df: pd.DataFrame, cfg: Config = DEFAULT,
         oos_rule[va_mask] = rule.predict_proba(Xva)
 
     pos["p_gbm"], pos["p_rule"], pos["p_logit"] = oos, oos_rule, oos_logit
+    # ENSEMBLE: mean of the (decorrelated) calibrated GBM and logistic probabilities.
+    with np.errstate(invalid="ignore"):
+        stack = np.vstack([oos, oos_logit])
+        pos["p_ens"] = np.where(np.isfinite(stack).any(axis=0),
+                                np.nanmean(stack, axis=0), np.nan)
     scored = pos[np.isfinite(oos)].copy()
 
     metrics = {
+        "ensemble": evaluate(scored["label"], scored["p_ens"]),
         "gbm": evaluate(scored["label"], scored["p_gbm"]),
         "logistic_baseline": evaluate(scored["label"], scored["p_logit"]),
         "rule_baseline": evaluate(scored["label"], scored["p_rule"]),
     }
-    reliability = reliability_curve(scored["label"], scored["p_gbm"])
+    # pick the production scorer = best OOS PR-AUC (selection guarded by locked holdout)
+    prod = max(("ensemble", "gbm", "logistic_baseline"),
+               key=lambda k: metrics[k]["pr_auc"] if np.isfinite(metrics[k]["pr_auc"]) else -1)
+    prod_col = {"ensemble": "p_ens", "gbm": "p_gbm", "logistic_baseline": "p_logit"}[prod]
+    reliability = reliability_curve(scored["label"], scored[prod_col])
 
-    # ---- regime-stratified GBM metrics ----
+    # ---- regime-stratified metrics (production scorer) ----
     regime_metrics = {}
     for rg, g in scored.groupby("regime"):
         if len(g) > 50:
-            regime_metrics[rg] = evaluate(g["label"], g["p_gbm"])
+            regime_metrics[rg] = evaluate(g["label"], g[prod_col])
 
-    # ---- locked holdout (touched once) ----
+    # ---- locked holdout (touched once), scored with the production model ----
     hold_mask, hold_cut = make_holdout(dates, frac=0.2)
     tr = ~hold_mask
     holdout = {"error": "insufficient data"}
@@ -89,14 +99,19 @@ def run(panel: pd.DataFrame, index_df: pd.DataFrame, cfg: Config = DEFAULT,
         gbm_h = CalibratedGBM(cfg.model, FEATURE_COLUMNS).fit(
             X_all[tr], y_all[tr], dates[tr])
         p_h = gbm_h.predict_proba(X_all[hold_mask])
+        if prod != "gbm":
+            logit_h = LogisticBaseline().fit(X_all[tr], y_all[tr])
+            p_hl = logit_h.predict_proba(X_all[hold_mask])
+            p_h = p_hl if prod == "logistic_baseline" else (p_h + p_hl) / 2
         holdout = evaluate(df.loc[hold_mask, "label"], p_h)
         holdout["cut_date"] = str(pd.to_datetime(hold_cut).date())
+        holdout["model"] = prod
 
     # ---- cost-aware backtest on OOS signals (fire top-k per day) ----
     fired = []
     for d, g in scored.groupby("date"):
-        g = g[(g["p_gbm"] >= cfg.ranking.min_confidence)]
-        g = g.sort_values("p_gbm", ascending=False).head(cfg.ranking.top_k_per_day)
+        g = g[(g[prod_col] >= cfg.ranking.min_confidence)]
+        g = g.sort_values(prod_col, ascending=False).head(cfg.ranking.top_k_per_day)
         for _, r in g.iterrows():
             fired.append({
                 "entry_date": r["entry_date"], "exit_date": r["exit_date"],
@@ -108,12 +123,19 @@ def run(panel: pd.DataFrame, index_df: pd.DataFrame, cfg: Config = DEFAULT,
 
     # ---- final model on ALL data -> alerts for the latest date ----
     final = CalibratedGBM(cfg.model, FEATURE_COLUMNS).fit(X_all, y_all, dates)
+    final_logit = LogisticBaseline().fit(X_all, y_all) if prod != "gbm" else None
     last_day = feats["date"].max()
     latest = feats[feats["date"] == last_day].dropna(subset=["atr_pct_20"]).copy()
     latest = latest[latest[FEATURE_COLUMNS].notna().mean(axis=1) > 0.7]
     alerts = []
     if len(latest):
-        latest["pred_proba"] = final.predict_proba(latest[FEATURE_COLUMNS])
+        p_g = final.predict_proba(latest[FEATURE_COLUMNS])
+        if prod == "gbm":
+            latest["pred_proba"] = p_g
+        elif prod == "logistic_baseline":
+            latest["pred_proba"] = final_logit.predict_proba(latest[FEATURE_COLUMNS])
+        else:
+            latest["pred_proba"] = (p_g + final_logit.predict_proba(latest[FEATURE_COLUMNS])) / 2
         latest["tradable_now"] = ~(
             (latest.get("t2t", 0) == 1) | (latest.get("asm", 0) == 1) |
             (latest.get("fno_ban", 0) == 1) | (latest.get("upper_circuit", 0) == 1))
@@ -128,6 +150,7 @@ def run(panel: pd.DataFrame, index_df: pd.DataFrame, cfg: Config = DEFAULT,
 
     return {
         "data_label": data_label,
+        "production_model": prod,
         "universe": {"symbols": int(panel["symbol"].nunique()),
                      "days": int(panel["date"].nunique()),
                      "date_range": [str(panel["date"].min().date()),

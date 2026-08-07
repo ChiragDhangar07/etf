@@ -106,9 +106,14 @@ def _fmt_pct(x, d=1):
 
 def build_inner(r: dict) -> str:
     synthetic = "LIVE" not in r.get("data_label", "SYNTHETIC")
-    m = r["metrics_oos"]["gbm"]
+    prod = r.get("production_model", "gbm")
+    prod_name = {"ensemble": "Ensemble", "gbm": "Gradient boosting",
+                 "logistic_baseline": "Logistic"}.get(prod, prod)
+    m = r["metrics_oos"][prod]          # headline = the production scorer
+    mg = r["metrics_oos"]["gbm"]
     ml = r["metrics_oos"]["logistic_baseline"]
     mr = r["metrics_oos"]["rule_baseline"]
+    me = r["metrics_oos"].get("ensemble", mg)
     bt = r.get("backtest", {})
     uni = r["universe"]
     cfg = r["config"]
@@ -145,14 +150,14 @@ def build_inner(r: dict) -> str:
                   "good" if bt["sharpe"] > 1 else "muted"),
         ])
 
-    # model comparison bars (lift over base rate)
+    # model comparison bars (lift over base rate); production model highlighted
     bars = _svg_bars([
-        ("GBM", m.get("lift_at_k", 0) or 0, "b-accent"),
-        ("Logistic", ml.get("lift_at_k", 0) or 0, "b-neutral"),
+        ("Ensemble", me.get("lift_at_k", 0) or 0, "b-accent" if prod == "ensemble" else "b-neutral"),
+        ("Logistic", ml.get("lift_at_k", 0) or 0, "b-accent" if prod == "logistic_baseline" else "b-neutral"),
+        ("GBM", mg.get("lift_at_k", 0) or 0, "b-accent" if prod == "gbm" else "b-neutral"),
         ("Rule", mr.get("lift_at_k", 0) or 0, "b-neutral"),
     ])
-    gbm_beats = (m.get("lift_at_k", 0) or 0) >= max(ml.get("lift_at_k", 0) or 0,
-                                                    mr.get("lift_at_k", 0) or 0)
+    beats_base = (m.get("lift_at_k", 0) or 0) > 1.05
 
     # equity curve
     eq = bt.get("equity_curve", {})
@@ -226,9 +231,9 @@ def build_inner(r: dict) -> str:
         leakage-safe walk-forward validation, India cost model.</p>
     </div>
     <div class="verdict">
-      {_pill(gbm_beats, "GBM &gt; baselines", "baseline wins")}
-      <div class="verdict-sub">{cfg["top_k_per_day"]} signals/day ·
-        {cfg["horizon_days"]}d barrier · embargo {cfg["embargo_days"]}d</div>
+      {_pill(beats_base, f"{prod_name} · {m.get('lift_at_k',0):.2f}× base", "no edge found")}
+      <div class="verdict-sub">production model: {html.escape(prod_name)} ·
+        {cfg["top_k_per_day"]} signals/day · {cfg["horizon_days"]}d barrier</div>
     </div>
   </header>
 
@@ -240,8 +245,9 @@ def build_inner(r: dict) -> str:
     <div class="card">
       <h3>Model vs. baselines <span class="hint">lift over base rate (OOS)</span></h3>
       {bars}
-      <p class="note">A complex model must beat the simple ones out-of-sample to earn
-        its place. Lift = precision@10% ÷ base rate.</p>
+      <p class="note">Every model must beat the base rate out-of-sample; a complex model
+        must beat the simple ones to earn its place. Here the <strong>{html.escape(prod_name.lower())}</strong>
+        leads, so it is the production scorer. Lift = precision@10% ÷ base rate.</p>
     </div>
     <div class="card">
       <h3>Calibration <span class="hint">predicted vs. observed</span></h3>

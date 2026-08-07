@@ -22,11 +22,15 @@ from aiscout.pipeline import run
 
 def main():
     t0 = time.time()
-    print("[1/3] Simulating synthetic market ...")
-    panel, index_df = simulate(n_symbols=140, n_days=1400, seed=7)
-    print(f"      {panel['symbol'].nunique()} symbols x {panel['date'].nunique()} days")
+    n_symbols = int(sys.argv[1]) if len(sys.argv) > 1 else 120
+    n_days = int(sys.argv[2]) if len(sys.argv) > 2 else 1200
+    print(f"[1/3] Simulating synthetic market ({n_symbols}x{n_days}) ...", flush=True)
+    panel, index_df = simulate(n_symbols=n_symbols, n_days=n_days, seed=7)
+    print(f"      {panel['symbol'].nunique()} symbols x {panel['date'].nunique()} days",
+          flush=True)
 
-    print("[2/3] Running pipeline (features -> labels -> walk-forward -> backtest -> alerts) ...")
+    print("[2/3] Running pipeline (features -> labels -> walk-forward -> backtest -> alerts) ...",
+          flush=True)
     results = run(panel, index_df, DEFAULT, data_label="SYNTHETIC")
 
     out = Path(__file__).resolve().parents[1] / "outputs" / "results.json"
