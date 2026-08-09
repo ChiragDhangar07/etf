@@ -23,7 +23,9 @@ from aiscout.pipeline import run
 
 
 def main():
-    symbols = sys.argv[1:] or yahoo.NIFTY_STARTER
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    do_email = "--email" in sys.argv
+    symbols = args or yahoo.NIFTY_STARTER
     print(f"Fetching {len(symbols)} symbols from Yahoo Finance ...")
     panel, index_df = yahoo.load(symbols, range_="3y", interval="1d")
     print(f"  got {panel['symbol'].nunique()} symbols x {panel['date'].nunique()} days")
@@ -33,9 +35,19 @@ def main():
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps(results, indent=2, default=str))
     print(f"Wrote {out}")
-    m = results["metrics_oos"]["gbm"]
-    print(f"OOS precision@10% {m['precision_at_k']:.1%} (lift {m['lift_at_k']:.2f}x) | "
-          f"PR-AUC {m['pr_auc']:.3f}")
+    prod = results["production_model"]
+    m = results["metrics_oos"][prod]
+    print(f"[{prod}] OOS precision@10% {m['precision_at_k']:.1%} "
+          f"(lift {m['lift_at_k']:.2f}x) | PR-AUC {m['pr_auc']:.3f}")
+    print(f"Today's alerts: {len(results['alerts'])}")
+
+    if do_email:
+        from aiscout.notify import email_alerts
+        try:
+            email_alerts(results)
+            print("Email sent.")
+        except Exception as e:  # noqa: BLE001
+            print(f"Email NOT sent: {e}")
 
 
 if __name__ == "__main__":
